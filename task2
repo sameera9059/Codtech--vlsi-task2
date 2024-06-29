@@ -1,0 +1,122 @@
+//test bench
+module tb_memory_controller;
+    reg clk;
+    reg reset;
+    reg [7:0] address;
+    reg [7:0] data_in;
+    reg read;
+    reg write;
+    wire [7:0] data_out;
+    wire ready;
+
+    // Instantiate the memory controller
+    memory_controller uut (
+        .clk(clk),
+        .reset(reset),
+        .address(address),
+        .data_in(data_in),
+        .read(read),
+        .write(write),
+        .data_out(data_out),
+        .ready(ready)
+    );
+
+    // Clock generation
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk;
+    end
+
+    // Test sequence
+    initial begin
+        // Initialize inputs
+        reset = 1;
+        address = 0;
+        data_in = 0;
+        read = 0;
+        write = 0;
+        #10;
+        
+        reset = 0;
+        #10;
+
+        // Write data to memory
+        address = 8'hA0;
+        data_in = 8'h55;
+        write = 1;
+        #10;
+        write = 0;
+        #10;
+
+        // Read data from memory
+        address = 8'hA0;
+        read = 1;
+        #10;
+        read = 0;
+        #10;
+
+        // Stop simulation
+        $stop;
+    end
+endmodule
+//design.sv
+module memory_controller (
+    input clk,
+    input reset,
+    input [7:0] address,       // Memory address
+    input [7:0] data_in,       // Data to be written
+    input read,                // Read request
+    input write,               // Write request
+    output reg [7:0] data_out, // Data read from memory
+    output reg ready           // Ready signal
+);
+    // Internal signals
+    reg [7:0] memory [0:255];  // 256 x 8-bit memory
+    reg [1:0] state;           // State machine states
+
+    // State encoding
+    localparam IDLE    = 2'b00,
+               READ    = 2'b01,
+               WRITE   = 2'b10,
+               WAIT    = 2'b11;
+
+    // State transition logic
+    always @(posedge clk or posedge reset) begin
+        if (reset)
+            state <= IDLE;
+        else begin
+            case (state)
+                IDLE: begin
+                    if (read)
+                        state <= READ;
+                    else if (write)
+                        state <= WRITE;
+                    else
+                        state <= IDLE;
+                end
+                READ: state <= WAIT;
+                WRITE: state <= WAIT;
+                WAIT: state <= IDLE;
+                default: state <= IDLE;
+            endcase
+        end
+    end
+
+    // Memory operations
+    always @(posedge clk) begin
+        if (state == READ)
+            data_out <= memory[address];
+        else if (state == WRITE)
+            memory[address] <= data_in;
+    end
+
+    // Ready signal
+    always @(posedge clk or posedge reset) begin
+        if (reset)
+            ready <= 1'b0;
+        else if (state == WAIT)
+            ready <= 1'b1;
+        else
+            ready <= 1'b0;
+    end
+endmodule
